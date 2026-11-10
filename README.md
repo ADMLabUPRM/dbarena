@@ -312,10 +312,6 @@ Frontend development uses Vite with an `/api` proxy (target `DBARENA_API_URL`, d
 cd gui/frontend && npm install && npm run dev
 ```
 
-## Maintenance notes
-
-> **Source of truth:** every command, port, volume, and variable in this README is transcribed from `docker-compose.yml`, `docker-compose.access.yml`, `docker-compose.embed-gpu.yml`, `Makefile`, `.env.example`, and `db/embed-server/{Dockerfile,entrypoint.py}`. If you change those files, reconcile this README (a static guard runs in `tests/test_readme_instructions.py`).
-
 ## Authors
 
 - **Ivan Conde-Sarmiento** — CISE Program, University of Puerto Rico, Mayagüez — ivan.conde@upr.edu
