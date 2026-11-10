@@ -1,0 +1,26 @@
+.raw-json {
+  background: #212529;
+  color: #f8f9fa;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  overflow-x: auto;
+}
+
+.goal-cell {
+  max-width: 420px;
+}
+
+.markdown table {
+  margin: 0.5rem 0;
+  --bs-table-bg: transparent;
+}
+
+.step-log {
+  list-style: none;
+  padding-left: 0;
+}
+
+.observation-view .markdown {
+  overflow-x: auto;
+}

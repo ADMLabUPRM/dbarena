@@ -1,0 +1,238 @@
+name: dbarena
+
+services:
+  admindb:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ADMINDB_USER:-dbarena}
+      POSTGRES_PASSWORD: ${ADMINDB_PASSWORD:-ivanof90}
+      POSTGRES_DB: ${ADMINDB_DB:-dbarena}
+    volumes:
+      - admindb_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ADMINDB_USER:-dbarena} -d ${ADMINDB_DB:-dbarena}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dbarena
+
+  taskdb:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TASKDB_USER:-dbarena}
+      POSTGRES_PASSWORD: ${TASKDB_PASSWORD:-tarzandb}
+      POSTGRES_DB: ${TASKDB_DB:-taskdb}
+    volumes:
+      - taskdb_data:/var/lib/postgresql/data
+      - ./db/init-taskdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TASKDB_USER:-dbarena} -d ${TASKDB_DB:-taskdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dbarena
+
+  judge:
+    build:
+      context: ./judge
+    restart: unless-stopped
+    environment:
+      JUDGE_LLM_BASE_URL: ${JUDGE_LLM_BASE_URL:-}
+      JUDGE_LLM_MODEL: ${JUDGE_LLM_MODEL:-}
+      JUDGE_LLM_API_KEY: ${JUDGE_LLM_API_KEY:-}
+      ADMINDB_URL: postgresql://${ADMINDB_USER:-dbarena}:${ADMINDB_PASSWORD:-ivanof90}@admindb:5432/${ADMINDB_DB:-dbarena}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-dbarena-answer-judge}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health', timeout=5)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dbarena
+      - default
+
+  ragdb:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${RAGDB_USER:-dbarena}
+      POSTGRES_PASSWORD: ${RAGDB_PASSWORD:-vectorsdb}
+      POSTGRES_DB: ${RAGDB_DB:-ragdb}
+    volumes:
+      - ragdb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RAGDB_USER:-dbarena} -d ${RAGDB_DB:-ragdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    ports:
+      - "${RAGDB_PORT:-5435}:5432"
+    networks:
+      - dbarena
+
+  backend:
+    build:
+      context: .
+      dockerfile: gui/backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      ADMINDB_URL: postgresql+psycopg://${ADMINDB_USER:-dbarena}:${ADMINDB_PASSWORD:-ivanof90}@admindb:5432/${ADMINDB_DB:-dbarena}
+      TASKDB_URL: postgresql+psycopg://${TASKDB_USER:-dbarena}:${TASKDB_PASSWORD:-tarzandb}@taskdb:5432/${TASKDB_DB:-taskdb}
+      OLAPDB_URL: ${OLAPDB_URL:-duckdb:////data/olap-tpch.duckdb}
+      DSDB_URL: ${DSDB_URL:-duckdb:////ds/tpcds.duckdb}
+      RAGDB_URL: postgresql+psycopg://${RAGDB_USER:-dbarena}:${RAGDB_PASSWORD:-vectorsdb}@ragdb:5432/${RAGDB_DB:-ragdb}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://embed-server:30000/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-large-en-v1.5}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+      JUDGE_URL: ${JUDGE_URL:-http://judge:9100}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/olapdb:/data
+      - ./data/dsdb:/ds
+    depends_on:
+      admindb:
+        condition: service_healthy
+      taskdb:
+        condition: service_healthy
+      ragdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dbarena
+
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    restart: unless-stopped
+    environment:
+      DBARENA_API_URL: http://backend:8000
+      MCP_TRANSPORT: streamable-http
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_SESSION_IDLE_TIMEOUT: ${MCP_SESSION_IDLE_TIMEOUT:-0}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; socket.create_connection(('127.0.0.1', 8090), timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - dbarena
+
+  frontend:
+    build:
+      context: ./gui/frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - dbarena
+
+  initializer:
+    profiles: ["seed"]
+    build:
+      context: ./db/initializer
+    restart: "no"
+    environment:
+      PGHOST: taskdb
+      PGPORT: 5432
+      PGDATABASE: ${TASKDB_DB:-taskdb}
+      PGUSER: ${TASKDB_USER:-dbarena}
+      PGPASSWORD: ${TASKDB_PASSWORD:-tarzandb}
+    depends_on:
+      taskdb:
+        condition: service_healthy
+    networks:
+      - dbarena
+
+  olapdb:
+    profiles: ["seed"]
+    build:
+      context: ./db/initializer-duckdb
+    restart: "no"
+    volumes:
+      - ./data/olapdb:/data
+    networks:
+      - dbarena
+
+  dsdb:
+    profiles: ["seed"]
+    build:
+      context: ./db/initializer-duckdb-tpcds
+    restart: "no"
+    volumes:
+      - ./data/dsdb:/data
+    networks:
+      - dbarena
+
+  embed-server:
+    profiles: ["embed"]
+    build:
+      context: ./db/embed-server
+    restart: unless-stopped
+    environment:
+      HF_HUB_OFFLINE: "1"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:30000/v1/models', timeout=5)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 180s
+    networks:
+      - dbarena
+
+  ragdb-fixture:
+    profiles: ["seed"]
+    build:
+      context: ./db/initializer-rag
+    restart: "no"
+    environment:
+      PGHOST: ragdb
+      PGPORT: 5432
+      PGDATABASE: ${RAGDB_DB:-ragdb}
+      PGUSER: ${RAGDB_USER:-dbarena}
+      PGPASSWORD: ${RAGDB_PASSWORD:-vectorsdb}
+      ADMINDB_URL: postgresql://${ADMINDB_USER:-dbarena}:${ADMINDB_PASSWORD:-ivanof90}@admindb:5432/${ADMINDB_DB:-dbarena}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      ragdb:
+        condition: service_healthy
+      admindb:
+        condition: service_healthy
+    networks:
+      - dbarena
+
+networks:
+  dbarena:
+    internal: true
+
+volumes:
+  admindb_data:
+  taskdb_data:
+  ragdb_data:

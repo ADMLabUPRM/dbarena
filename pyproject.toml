@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbarena"
+version = "0.1.0"
+description = "DBArena: a WebArena-style agent benchmark environment for database tasks (Phase I core)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "gymnasium==1.2.3",
+    "sqlalchemy==2.0.54",
+    "psycopg[binary]==3.2.13",
+    "duckdb==1.4.5",
+    "duckdb-engine==0.17.0",
+    "fastapi==0.142.2",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.13.5",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "mcp==1.30.0",
+    "httpx==0.28.1",
+]
+dev = [
+    "pytest==8.4.2",
+    "httpx==0.28.1",
+    "ruff==0.16.10",
+    "mcp==1.30.0",
+    "langsmith==0.14.7",
+    "langchain-openai==0.3.35",
+]
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["dbarena*", "mcp_server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests", "mcp_server"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

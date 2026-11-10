@@ -1,0 +1,573 @@
+ {
+  "product": "Nimbus Gateway",
+  "r02_task": {
+   "query_text": "connection pool exhaustion under load",
+   "version": "4.2.0",
+   "resolved_cutoff": "2024-06-01",
+   "gold": [
+    "INC-1041",
+    "INC-1047",
+    "INC-1052",
+    "INC-1058"
+   ]
+  },
+  "r03_task": {
+   "question": "explain why connection pools exhaust on version 4.2.0 under load and how the problem was fixed",
+   "expected_answer": "On version 4.2.0, connection pools exhausted under load for two reasons documented in the incident reports. First, connections stuck in timed-out upstream calls were returned to the pool without being reset, so subsequent requests reused half-open sockets and the pool drifted toward exhaustion (INC-1047). Second, after a database failover every worker retried simultaneously, pinning the pool at capacity in a retry storm (INC-1058). Sustained peak traffic exposed both defects: worker threads held pooled connections through slow retries until the wait queue overflowed and clients received 503 responses (INC-1041), and the wait queue overflowed repeatedly during peak windows (INC-1052). The problem was fixed in 4.2.1, which validates pooled sockets before hand-off and releases connections eagerly, and serializes failover reconnects with jittered backoff. The relevant incidents are INC-1041, INC-1047, INC-1052, and INC-1058.",
+   "gold": [
+    "INC-1041",
+    "INC-1047",
+    "INC-1052",
+    "INC-1058"
+   ]
+  },
+  "variant_tasks": [
+   {
+    "task_id": "DBA-R02-002",
+    "kind": "retrieval",
+    "question": "Which open incident reports are related to connection pools?",
+    "filters": {
+     "status": "open"
+    },
+    "gold": [
+     "INC-1063",
+     "INC-1066"
+    ]
+   },
+   {
+    "task_id": "DBA-R02-003",
+    "kind": "retrieval",
+    "question": "Find the resolved incident reports about memory problems affecting version 4.2.0.",
+    "filters": {
+     "version": "4.2.0",
+     "status": "resolved"
+    },
+    "gold": [
+     "INC-1044",
+     "INC-1103"
+    ]
+   },
+   {
+    "task_id": "DBA-R02-004",
+    "kind": "retrieval",
+    "question": "Find the resolved incident reports about webhook deliveries on versions 4.1.2 and 4.2.0.",
+    "filters": {
+     "versions": [
+      "4.1.2",
+      "4.2.0"
+     ],
+     "status": "resolved"
+    },
+    "gold": [
+     "INC-1112",
+     "INC-1113"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-002",
+    "kind": "judged",
+    "question": "Explain what went wrong with the response cache on version 4.2.0 and what was done about it.",
+    "reward_mode": "dense",
+    "key_points": [
+     "the response cache on version 4.2.0 grew without bound under sustained traffic, leaking roughly 200 MB of RSS per hour until eviction thrashed (INC-1044)",
+     "operators used periodic cache flushes as a workaround and the response cache fix was tracked for 4.2.2 (INC-1044)",
+     "popular expiring keys caused cache stampedes where concurrent requests rebuilt the same entry at once; single-flight locking now collapses those rebuilds, though the incident is still open (INC-1120)",
+     "the answer cites the gold incident ids INC-1044 and INC-1120"
+    ],
+    "expected_answer": "Two cache problems were reported on the 4.2 line. On version 4.2.0 the response cache grew without bound under sustained traffic, leaking roughly 200 MB of RSS per hour until eviction thrashed; operators used periodic cache flushes as a workaround and the fix was tracked for 4.2.2 (INC-1044). Separately, popular expiring keys caused cache stampedes where concurrent requests rebuilt the same entry at once; single-flight locking now collapses those rebuilds, though that incident is still open (INC-1120).",
+    "gold": [
+     "INC-1044",
+     "INC-1120"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-003",
+    "kind": "judged",
+    "question": "Summarize the upgrade and rollback problems reported for version 4.2.0 and how migrations were made safer.",
+    "expected_answer": "Two problems accompanied the 4.2.0 upgrade path. The upgrade migration copied large policy tables row by row and stalled mid-migration; the migration now batches work by primary key range so large tables complete (INC-1110). Rolling back from 4.2.0 to 4.1.2 left rows in the new schema shape, corrupting the older deployment; the rollback path now migrates those rows back to the previous shape (INC-1111).",
+    "gold": [
+     "INC-1110",
+     "INC-1111"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-004",
+    "kind": "judged",
+    "question": "Explain the backup and restore pitfalls reported for the gateway and how they were addressed.",
+    "expected_answer": "Three backup and restore pitfalls were reported. Scheduled backups were silently skipped while the gateway was in maintenance mode, leaving gaps nobody noticed; skips are now surfaced as warnings (INC-1124). Backup restores missed keys rotated in the final hour before a snapshot was taken; the snapshot window now includes pending key rotations (INC-1125). Snapshot uploads also timed out on IPv6-only hosts because the resolver preferred a dead IPv4 route; the resolver now honors the configured order (INC-1108).",
+    "gold": [
+     "INC-1124",
+     "INC-1125",
+     "INC-1108"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-005",
+    "kind": "judged",
+    "question": "Explain how webhook delivery problems were diagnosed and fixed.",
+    "expected_answer": "Two webhook problems were reported. Deliveries retried without backoff after receiver 5xx responses, hammering already-struggling receivers; retries now use exponential backoff with jitter (INC-1112). Separately, hosts with clock drift produced mismatched webhook signatures, causing receivers to reject valid deliveries; signatures now use the server's monotonic ordering window so small drift cannot break validation (INC-1113).",
+    "gold": [
+     "INC-1112",
+     "INC-1113"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-006",
+    "kind": "judged",
+    "question": "Explain the response cache problems reported on version 4.2.0, the cache stampedes on expiring popular keys, and the stale cached authorization decisions reported on version 4.1.2.",
+    "reward_mode": "dense",
+    "key_points": [
+     "the response cache on version 4.2.0 leaked memory without bound under sustained traffic (INC-1044)",
+     "the response cache fix was tracked for 4.2.2 with periodic flushes as a workaround (INC-1044)",
+     "expiring popular keys caused cache stampedes with concurrent rebuilds, collapsed by single-flight locking, still open (INC-1120)",
+     "role changes on version 4.1.2 left stale cached authorization decisions, now invalidated immediately (INC-1121)",
+     "the answer cites the gold incident ids INC-1044, INC-1120, and INC-1121"
+    ],
+    "expected_answer": "Three cache-related problems span the 4.x line. On 4.2.0 the response cache leaked, growing without bound under sustained traffic until eviction thrashed; the fix was tracked for 4.2.2 with operators using periodic flushes as a workaround (INC-1044). Also on 4.2.0, expiring popular keys caused cache stampedes with concurrent rebuilds; single-flight locking now collapses them, though that incident remains open (INC-1120). Also on 4.1.2, role changes did not invalidate cached authorization decisions, so stale permissions were served until expiry; invalidation is now immediate (INC-1121).",
+    "gold": [
+     "INC-1044",
+     "INC-1120",
+     "INC-1121"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-007",
+    "kind": "judged",
+    "question": "Explain how authentication and identity problems were resolved.",
+    "reward_mode": "dense",
+    "key_points": [
+     "an SSO redirect loop occurred when the identity provider rotated its signing key mid-session; clearing the provider cache restored sign-in (INC-1100)",
+     "revoked API tokens remained valid for up to ten minutes because the revocation cache lagged behind; the cache now invalidates immediately on write (INC-1101)",
+     "parallel deployments sharing a service account tripped the lockout policy and locked the account; lockouts now key on the deployment id so independent deployments do not collide (INC-1102)",
+     "the answer cites the gold incident ids INC-1100, INC-1101, and INC-1102"
+    ],
+    "expected_answer": "Three authentication and identity problems were resolved. An SSO redirect loop occurred when the identity provider rotated its signing key mid-session; clearing the provider cache restored sign-in (INC-1100). Revoked API tokens remained valid for up to ten minutes because the revocation cache lagged behind; the cache now invalidates immediately on write (INC-1101). Parallel deployments sharing a service account tripped the lockout policy and locked the account; lockouts now key on the deployment id so independent deployments do not collide (INC-1102).",
+    "gold": [
+     "INC-1100",
+     "INC-1101",
+     "INC-1102"
+    ]
+   },
+   {
+    "task_id": "DBA-R03-008",
+    "kind": "judged",
+    "question": "Explain the latency and performance problems reported on version 4.2.0 and their fixes.",
+    "expected_answer": "Three latency and performance problems were reported on version 4.2.0. Log compaction pinned an entire core during runs, spiking p99 latency; compaction is now throttled and moved to the background (INC-1105). Metadata queries scanned full catalogs on busy gateways; covering indexes brought them back to millisecond latencies (INC-1118). And reloading the serving certificate stalled new TLS handshakes for up to ninety seconds; certificate reloads are now serialized so handshakes queue briefly instead of stalling (INC-1049).",
+    "gold": [
+     "INC-1105",
+     "INC-1118",
+     "INC-1049"
+    ]
+   }
+  ],
+  "incidents": [
+  {
+   "incident_id": "INC-1012",
+   "title": "Connection pool exhaustion on legacy thread pool",
+   "body": "Gateway 2.3.0 exhausted its legacy thread-bound pool under batch import load. This predates the 4.x pool rework; upgrading to the 4.x line is the resolution path.",
+   "product_version": "2.3.0",
+   "status": "resolved",
+   "resolved_date": "2023-11-14"
+  },
+  {
+   "incident_id": "INC-1066",
+   "title": "Intermittent pool stalls with streaming responses",
+   "body": "Gateway 2.3.1 occasionally stalls pooled connections while streaming large responses. Under investigation; no resolution yet.",
+   "product_version": "2.3.1",
+   "status": "open",
+   "resolved_date": null
+  },
+  {
+   "incident_id": "INC-1101",
+   "title": "API tokens accepted after revocation",
+   "body": "Revoked API tokens remained valid for up to ten minutes because the revocation cache lagged. The cache now invalidates on write.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1063",
+   "title": "Connection pool exhaustion with HTTP/2 streams",
+   "body": "The 5.0.0-beta multiplexes HTTP/2 streams over pooled connections; under churn the pool over-creates sockets. Known limitation of the beta channel.",
+   "product_version": "5.0.0-beta",
+   "status": "open",
+   "resolved_date": null
+  },
+  {
+   "incident_id": "INC-1109",
+   "title": "Log rotation skipped on read-only volumes",
+   "body": "Gateways with read-only log volumes skipped rotation silently and filled adjacent mounts. Rotation failures now alert.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1049",
+   "title": "TLS handshake latency spikes after certificate reload",
+   "body": "Reloading the serving certificate on 4.2.0 stalls new TLS handshakes for up to ninety seconds. Reload during maintenance windows until 4.2.2 serializes reloads.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-07-11"
+  },
+  {
+   "incident_id": "INC-1029",
+   "title": "Connection pool exhaustion after upgrade from 4.1.x",
+   "body": "Upgrades to 4.2.0 from 4.1.x briefly exhausted pools while caches warmed. A one-time warmup task resolved this class of reports in early 2024.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-03-11"
+  },
+  {
+   "incident_id": "INC-1123",
+   "title": "Sorting resets when paginating task lists",
+   "body": "Paginating the task list reset the active sort; sort state persists across pages.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1110",
+   "title": "Upgrade migration stalls on large policy tables",
+   "body": "The 4.2.0 migration copied large policy tables row by row and stalled; the migration now batches by primary key range.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1055",
+   "title": "Audit log flood from verbose policy tracing",
+   "body": "Enabling policy tracing on 4.2.0 writes one audit row per header, filling partitions within hours. Tracing is now sampled by default.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-07-25"
+  },
+  {
+   "incident_id": "INC-1121",
+   "title": "Stale cache entries served after role changes",
+   "body": "Role changes did not invalidate cached authorization decisions; invalidation is now immediate.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1134",
+   "title": "Query planner picks stale statistics after import (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1119.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1111",
+   "title": "Rollback leaves mixed-schema rows",
+   "body": "Rolling back from 4.2.0 to 4.1.2 left rows in the new schema shape; the rollback path now migrates them back.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1102",
+   "title": "Service account lockouts under parallel deployments",
+   "body": "Parallel deployments sharing a service account tripped the lockout policy. Lockouts now key on deployment id.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1133",
+   "title": "Service account lockouts under parallel deployments (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1102.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1127",
+   "title": "Schema registry cache misses on hot path",
+   "body": "Schema lookups on the ingest hot path missed registry caches after expiry storms; caches now prewarm.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2024-01-03"
+  },
+  {
+   "incident_id": "INC-1058",
+   "title": "Connection pool exhaustion with retry storm after failover",
+   "body": "After a database failover, every 4.2.0 gateway worker retried simultaneously and pinned the connection pool at capacity. The exhaustion cleared only when workers were recycled. Fixed by serializing failover reconnects in 4.2.1.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-08-21"
+  },
+  {
+   "incident_id": "INC-1124",
+   "title": "Scheduled backups skipped under maintenance mode",
+   "body": "Maintenance mode silently skipped scheduled backups; skips are now surfaced as warnings.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1044",
+   "title": "Memory leak in response cache on 4.2.0",
+   "body": "Sustained traffic on 4.2.0 grows the response cache without bound; RSS climbs roughly 200 MB per hour until eviction thrashes. Workaround: periodic cache flush. Fix tracked for 4.2.2.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-06-28"
+  },
+  {
+   "incident_id": "INC-1119",
+   "title": "Query planner picks stale statistics after import",
+   "body": "After bulk imports the planner used stale statistics; imports now trigger auto-analysis.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1105",
+   "title": "p99 latency spikes during log compaction",
+   "body": "Log compaction on 4.2.0 pinned an entire core, spiking p99 latency. Compaction is now throttled and backgrounded.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1115",
+   "title": "Reload ignores include-file changes",
+   "body": "Configuration reloads missed changes in include files; includes are hashed and watched now.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1126",
+   "title": "Ingest pipeline drops events with duplicate ids",
+   "body": "Ingest silently dropped events reusing ids within a window; duplicates are now quarantined for review.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1112",
+   "title": "Webhook retries hammer receivers after 5xx",
+   "body": "Webhook deliveries retried without backoff, hammering receivers returning 5xx. Retries now use exponential backoff with jitter.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1104",
+   "title": "Off-heap cache not respecting budget",
+   "body": "The off-heap cache exceeded its configured budget under mixed workloads; the budget is enforced with strict LRU.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1131",
+   "title": "Connection pool exhaustion with HTTP/2 streams (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1063.",
+   "product_version": "5.0.0-beta",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1057",
+   "title": "Config reload drops in-flight websocket sessions",
+   "body": "A configuration reload on 4.2.0 restarts the listener and drops established websocket sessions. Reloads now drain listeners gracefully as of 4.2.1.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-08-08"
+  },
+  {
+   "incident_id": "INC-1128",
+   "title": "Timezone handling off by one hour at boundaries",
+   "body": "Scheduled maintenance windows fired an hour early in half-hour offset zones; zone rules updated.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1122",
+   "title": "Dashboard charts misalign on narrow viewports",
+   "body": "Dashboard charts overlapped on narrow viewports; the grid collapses to a single column now.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-01-03"
+  },
+  {
+   "incident_id": "INC-1117",
+   "title": "DNS resolver ignores search domains",
+   "body": "Short hostnames failed to resolve because search domains were ignored; the resolver honors the search list.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-01-03"
+  },
+  {
+   "incident_id": "INC-1129",
+   "title": "Graceful shutdown exceeds termination grace",
+   "body": "Shutdown exceeded the termination grace period waiting for idle connections; idle connections now close first.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-18"
+  },
+  {
+   "incident_id": "INC-1108",
+   "title": "Snapshot uploads fail on IPv6-only links",
+   "body": "Snapshot uploads timed out on IPv6-only hosts because the resolver preferred a dead v4 route. Resolver order is now honored.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1100",
+   "title": "SSO redirect loop after identity provider refresh",
+   "body": "The SSO flow loops when the identity provider rotates its signing key mid-session; clearing the provider cache restores sign-in.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1135",
+   "title": "Service account lockouts under parallel deployments (duplicate report) (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1133.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1120",
+   "title": "Cache stampede on expiring popular keys",
+   "body": "Expiring popular keys caused request stampedes; single-flight locking now collapses concurrent rebuilds.",
+   "product_version": "4.2.0",
+   "status": "open",
+   "resolved_date": null
+  },
+  {
+   "incident_id": "INC-1107",
+   "title": "Disk usage growth from orphaned upload chunks",
+   "body": "Interrupted uploads left orphaned chunks on disk; a periodic sweep now reclaims them.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1130",
+   "title": "Environment variable precedence surprise (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1114.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1116",
+   "title": "Connection resets through NAT gateways",
+   "body": "Long-lived connections through NAT gateways reset after five idle minutes; keepalives now match the common NAT timeout.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2024-01-03"
+  },
+  {
+   "incident_id": "INC-1047",
+   "title": "Pooled connections not released after gateway timeouts",
+   "body": "On 4.2.0, connections stuck in a timed-out upstream call were returned to the pool without being reset. Subsequent requests reused half-open sockets and the pool drifted toward exhaustion under load. The 4.2.1 patch validates pooled sockets before hand-off.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-07-18"
+  },
+  {
+   "incident_id": "INC-1113",
+   "title": "Webhook signatures mismatch after clock drift",
+   "body": "Hosts with clock drift produced mismatched webhook signatures; signatures now use the server's monotonic ordering window.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1060",
+   "title": "Admin console renders blank page with strict CSP",
+   "body": "Browsers enforcing strict CSP receive a blank admin console from 4.2.0; the inline bootstrap script needs a nonce. Nonce support ships in 4.2.2.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-08-15"
+  },
+  {
+   "incident_id": "INC-1061",
+   "title": "Metrics cardinality explosion from per-route labels",
+   "body": "Per-route metric labels on busy 4.2.0 gateways explode Prometheus cardinality. Label templates replace per-route labels in 4.2.2.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-08-29"
+  },
+  {
+   "incident_id": "INC-1118",
+   "title": "Slow metadata queries on large catalogs",
+   "body": "Metadata queries scanned full catalogs on busy gateways; covering indexes bring them back to milliseconds.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1106",
+   "title": "Cold-start latency after configuration reload",
+   "body": "First requests after a configuration reload recompile routing tables synchronously. Tables now warm in the background.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  },
+  {
+   "incident_id": "INC-1132",
+   "title": "Dashboard charts misalign on narrow viewports (duplicate report)",
+   "body": "Duplicate report consolidated into INC-1122.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-05-02"
+  },
+  {
+   "incident_id": "INC-1041",
+   "title": "Connection pool exhaustion under sustained load",
+   "body": "Gateway 4.2.0 exhausted its connection pool after roughly forty minutes of sustained peak traffic. Worker threads held pooled connections through slow upstream retries, so the wait queue overflowed and clients saw 503s. Mitigation: restart the gateway; permanent fix ships in 4.2.1 with eager connection release.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-07-03"
+  },
+  {
+   "incident_id": "INC-1033",
+   "title": "Slow pool recycling on 4.1.2",
+   "body": "Gateway 4.1.2 recycled idle pool connections too aggressively, causing latency spikes rather than exhaustion. Addressed by the 4.2.0 pool rework.",
+   "product_version": "4.1.2",
+   "status": "resolved",
+   "resolved_date": "2024-02-09"
+  },
+  {
+   "incident_id": "INC-1114",
+   "title": "Environment variable precedence surprise",
+   "body": "Environment variables overrode explicit file configuration unexpectedly; precedence is now documented and enforced.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-01-03"
+  },
+  {
+   "incident_id": "INC-1052",
+   "title": "Pool wait queue overflow during peak traffic",
+   "body": "During the Tuesday peak the 4.2.0 gateway logged 'pool wait queue full' and rejected new requests for several minutes. Load tracing tied the exhaustion to retry storms amplifying hold times. Operators should cap retries; 4.2.1 adds jittered backoff.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2024-08-02"
+  },
+  {
+   "incident_id": "INC-1103",
+   "title": "Heap growth in streaming aggregator",
+   "body": "The streaming aggregator retains buffered frames after client disconnects, growing the heap steadily. Frames are released on disconnect now.",
+   "product_version": "4.2.0",
+   "status": "resolved",
+   "resolved_date": "2023-12-04"
+  },
+  {
+   "incident_id": "INC-1125",
+   "title": "Backup restore misses recently rotated keys",
+   "body": "Restores missed keys rotated in the final hour before a snapshot; the snapshot window now includes pending rotations.",
+   "product_version": "4.2.1",
+   "status": "resolved",
+   "resolved_date": "2023-12-07"
+  }
+ ]
+}

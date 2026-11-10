@@ -1,0 +1,8 @@
+# GPU overlay for the in-stack SGLang embedding server. Include it when the
+# host has an NVIDIA GPU (the `make embed-server` target detects this):
+#   docker compose -f docker-compose.yml -f docker-compose.embed-gpu.yml --profile embed up -d embed-server
+services:
+  embed-server:
+    gpus: all
+    ipc: host
+    shm_size: "1gb"
