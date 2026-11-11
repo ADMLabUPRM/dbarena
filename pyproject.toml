@@ -1,12 +1,14 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbarena"
 version = "0.1.0"
-description = "DBArena: a WebArena-style agent benchmark environment for database tasks (Phase I core)"
+description = "DBArena: an agent benchmark environment for database tasks (Phase I core)"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "gymnasium==1.2.3",

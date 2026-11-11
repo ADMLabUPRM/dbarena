@@ -1,6 +1,6 @@
 # DBArena 
 
-A WebArena-style benchmark environment for database tasks: a Gymnasium environment over SQL databases (OLTP, analytics, OLAP, RAG), a task catalog with exact oracles and LLM-judged tasks, a standard observation format (`dbarena-observation/v1`), an admin GUI for task parametrization and manual stepping, an MCP server for AI agents, and a fully dockerized stack.
+A benchmark environment for database tasks: a Gymnasium environment over SQL databases (OLTP, analytics, OLAP, RAG), a task catalog with exact oracles and LLM-judged tasks, a standard observation format (`dbarena-observation/v1`), an admin GUI for task parametrization and manual stepping, an MCP server for AI agents, and a fully dockerized stack.
 
 This README is the complete run guide. New to the project? Follow **Prerequisites → Recommended hardware → Quickstart** — everything after that is reference material.
 
@@ -320,3 +320,7 @@ cd gui/frontend && npm install && npm run dev
 ## Acknowledgments
 
 This material is based upon work supported by the National Science Foundation under Grant No. OAC-2407329. This paper was supported in part by a grant from the Center of Excellence for Transportation and Logistics (CETL) at University of Puerto Rico, Mayagüez. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation, or the CETL.
+
+## License
+
+DBArena is released under the [Apache License 2.0](LICENSE).
